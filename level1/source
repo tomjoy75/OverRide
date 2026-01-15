@@ -1,0 +1,89 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+
+char user_name[100];   
+
+// Check username
+bool verify_user_name(void)
+{
+    puts("verifying username....\n");
+    return memcmp(user_name, "dat_wil", 7) != 0; // Return true if different
+}
+
+// Check password
+bool verify_user_pass(const char *password)
+{
+    return memcmp(password, "admin", 5) != 0; // Return true if not "admin"
+}
+
+int main(void)
+{
+    char password[64];
+    bool invalid;
+
+    memset(password, 0, sizeof(password));
+    invalid = false;
+
+    puts("********* ADMIN LOGIN PROMPT *********");
+
+    printf("Enter Username: ");
+    fgets(user_name, sizeof(user_name), stdin);
+
+    invalid = verify_user_name();
+    if (invalid)
+    {
+        puts("nope, incorrect username...\n");
+    }
+    else
+    {
+        puts("Enter Password: ");
+        fgets(password, 100, stdin);
+
+        invalid = verify_user_pass(password);
+        puts("nope, incorrect password...\n");
+    }
+
+    return 1;
+}
+
+
+GHIDRA 
+/----- (08048464) --------------------------------------------------------
+_BOOL4 verify_user_name()
+{
+  puts("verifying username....\n");
+  return memcmp(a_user_name, "dat_wil", 7u) != 0;
+}
+
+//----- (080484A3) --------------------------------------------------------
+_BOOL4 __cdecl verify_user_pass(const void *a1)
+{
+  return memcmp(a1, "admin", 5u) != 0;
+}
+
+//----- (080484D0) --------------------------------------------------------
+int __cdecl main(int argc, const char **argv, const char **envp)
+{
+  char s[64]; // [esp+1Ch] [ebp-4Ch] BYREF
+  _BOOL4 v5; // [esp+5Ch] [ebp-Ch]
+
+  memset(s, 0, sizeof(s));
+  v5 = 0;
+  puts("********* ADMIN LOGIN PROMPT *********");
+  printf("Enter Username: ");
+  fgets(a_user_name, 256, stdin);
+  v5 = verify_user_name();
+  if ( v5 )
+  {
+    puts("nope, incorrect username...\n");
+  }
+  else
+  {
+    puts("Enter Password: ");
+    fgets(s, 100, stdin);
+    v5 = verify_user_pass(s);
+    puts("nope, incorrect password...\n");
+  }
+  return 1;
+}
