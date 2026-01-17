@@ -1,0 +1,45 @@
+# Etape 1 : la cle
+Dans la fonction decrypt, on constate que le buffer doit valoir "Congratulations!"
+le buffer qui valait  "Q}|u`sfg~sf{}|a3" est passe par l'operation:
+buffer[i] ^= key;
+On cherche a determiner la key qui permet d'avoir le bon resultat apres un XOR
+Dans XOR,
+donne 0 si A = B
+      1 si A != B
+<!-- On teste avec la premiere lettre
+Q (0x51) -> C (0x43) ou 
+0111 1101 -> 0110 1111
+on trouve key = 0001 0010 soit 0x12 ou 18
+On checke avec les autres lettres si c'est coherent -->
+On va utiliser une des propriete de XOR :
+Si A ^ B = C
+C ^ B = A
+A ^ C = B
+soit
+key = ciphertext ^ plaintext
+(gdb) set $key = 'Q' ^ 'C'
+(gdb) p $key
+$17 = 18
+(gdb) p/c '}' ^ $key
+$18 = 111 'o'
+(gdb) p/c '|' ^ $key
+$19 = 110 'n'
+(gdb) p/c 'u' ^ $key
+$20 = 103 'g'
+(gdb) p/c '`' ^ $key
+$21 = 114 'r'
+...
+La cle est 18 (0x12)
+
+# Etape 2
+
+int diff = reference - user_input;
+avec diff = 18 et reference = 322424845
+user_input = reference - diff = 322424845 - 18 = 322424827
+level03@OverRide:~$ ./level03 
+***********************************
+*		level03		**
+***********************************
+Password:322424827
+$ whoami
+level04

@@ -1,0 +1,160 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+
+/*
+ * clear_stdin
+ * ------------
+ * Vide l'entrée standard jusqu'à rencontrer :
+ *  - un saut de ligne ('\n')
+ *  - ou EOF
+ *
+ * Utilisé après un scanf pour éviter que des caractères
+ * résiduels ne perturbent les lectures suivantes.
+ */
+int clear_stdin(void)
+{
+    int c;
+
+    do {
+        c = getchar();
+    } while (c != '\n' && c != EOF);
+
+    return c;
+}
+
+/*
+ * get_unum
+ * --------
+ * Lit un entier non signé depuis stdin.
+ * - force le flush de stdout (pour affichage correct des prompts)
+ * - nettoie stdin après la lecture
+ *
+ * Fonction utilitaire classique dans les binaires 42.
+ */
+unsigned int get_unum(void)
+{
+    unsigned int value = 0;
+
+    fflush(stdout);
+    scanf("%u", &value);
+    clear_stdin();
+
+    return value;
+}
+
+/*
+ * prog_timeout
+ * ------------
+ * Termine brutalement le programme avec un code de sortie 1.
+ * Marquée noreturn car elle ne rend jamais la main.
+ *
+ * Probablement prévue pour être appelée via un timeout / signal.
+ */
+__attribute__((noreturn))
+void prog_timeout(void)
+{
+    _exit(1);
+}
+
+/*
+ * decrypt
+ * -------
+ * Fonction centrale du challenge.
+ *
+ * - Initialise une chaîne chiffrée en dur
+ * - Applique un XOR avec une clé (1 octet) sur chaque caractère
+ * - Compare le résultat à "Congratulations!"
+ *
+ * Si la comparaison est vraie :
+ *   → ouvre un shell (/bin/sh)
+ * Sinon :
+ *   → affiche "Invalid Password"
+ *
+ * Le chiffrement est un XOR symétrique trivial.
+ */
+int decrypt(char key)
+{
+    char buffer[32];
+    size_t len;
+    unsigned int i;
+
+    // Chaîne chiffrée stockée en dur dans le binaire
+    strcpy(buffer, "Q}|u`sfg~sf{}|a3");
+    len = strlen(buffer);
+
+    // Déchiffrement XOR caractère par caractère
+    for (i = 0; i < len; i++) {
+        buffer[i] ^= key;
+    }
+
+    // Vérification du résultat
+    if (strcmp(buffer, "Congratulations!") == 0) {
+        return system("/bin/sh");
+    } else {
+        return puts("\nInvalid Password");
+    }
+}
+
+/*
+ * test
+ * ----
+ * Fonction de contrôle logique.
+ *
+ * - Calcule la différence entre une valeur de référence
+ *   et l'entrée utilisateur
+ * - Si cette différence appartient à un ensemble précis,
+ *   elle est utilisée comme clé XOR
+ * - Sinon, une clé aléatoire est utilisée (échec quasi certain)
+ *
+ * Le switch définit implicitement l'espace des clés valides.
+ */
+int test(int user_input, int reference)
+{
+    int diff = reference - user_input;
+    char key;
+
+    switch (diff) {
+        case 1: case 2: case 3: case 4: case 5:
+        case 6: case 7: case 8: case 9:
+        case 16: case 17: case 18:
+        case 19: case 20: case 21:
+            return decrypt(diff);
+
+        default:
+            key = rand();
+            return decrypt(key);
+    }
+}
+
+/*
+ * main
+ * ----
+ * Point d'entrée du programme.
+ *
+ * - Initialise le générateur pseudo-aléatoire
+ * - Affiche un banner
+ * - Demande un "Password" (entier)
+ * - Appelle test() avec une valeur de référence constante
+ *
+ * Aucune vérification directe du mot de passe n'est faite ici :
+ * tout repose sur l'arithmétique et le XOR.
+ */
+int main(int argc, char **argv)
+{
+    int password;
+
+    srand(time(NULL));
+
+    puts("***********************************");
+    puts("*\t\tlevel03\t\t**");
+    puts("***********************************");
+    printf("Password: ");
+
+    scanf("%d", &password);
+    test(password, 322424845);
+
+    return 0;
+}
