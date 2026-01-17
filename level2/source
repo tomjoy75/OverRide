@@ -1,0 +1,54 @@
+int main(void)
+{
+    char username[100];     // s
+    char password[100];     // s2
+    char real_pass[41];     // ptr (41 bytes)
+    FILE *fp;
+    int n;
+
+    memset(username, 0, sizeof(username));
+    memset(password, 0, sizeof(password));
+    memset(real_pass, 0, sizeof(real_pass));
+
+    fp = fopen("/home/users/level03/.pass", "r");
+    if (!fp) {
+        fwrite("ERROR: failed to open password file\n", 1, 0x24, stderr);
+        exit(1);
+    }
+
+    n = fread(real_pass, 1, 0x29, fp);   // 41 bytes  //TODO: Comprendre la
+    real_pass[strcspn(real_pass, "\n")] = '\0'; // Maniere de mettre un \0 a la fin (et a la place de \n)
+
+    if (n != 41) {
+        fwrite("ERROR: failed to read password file\n", 1, 0x24, stderr);
+        fwrite("ERROR: failed to read password file\n", 1, 0x24, stderr);
+        exit(1);
+    }
+
+    fclose(fp);
+
+    puts("===== [ Secure Access System v1.0 ] =====");
+    puts("/***************************************\\");
+    puts("| You must login to access this system. |");
+    puts("\\**************************************/");
+
+    printf("--[ Username: ");
+    fgets(username, 100, stdin);
+    username[strcspn(username, "\n")] = '\0';
+
+    printf("--[ Password: ");
+    fgets(password, 100, stdin);
+    password[strcspn(password, "\n")] = '\0';
+
+    puts("*****************************************");
+
+    if (strncmp(real_pass, password, 41) == 0) {
+        printf("Greetings, %s!\n", username);
+        system("/bin/sh");
+        return 0;
+    }
+
+    printf(username);
+    puts(" does not have access!");
+    exit(1);
+}
