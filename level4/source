@@ -1,0 +1,64 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/ptrace.h>
+#include <sys/prctl.h>
+#include <sys/wait.h>
+#include <signal.h>
+
+int main(void)
+{
+    pid_t child;
+    int status;
+    long syscall;
+    char buffer[128];
+
+    /* Création d’un processus fils */
+    child = fork();
+
+    /* Initialisation du buffer */
+    for (int i = 0; i < sizeof(buffer); i++)
+        buffer[i] = 0;
+
+    if (child == 0) {
+        /* === PROCESSUS FILS === */
+
+        /* Empêche le fils d’être tracé par quelqu’un d’autre */
+        prctl(PR_SET_DUMPABLE, 1);
+
+        /* Le fils accepte d’être tracé par le père */
+        ptrace(PTRACE_TRACEME, 0, NULL, NULL);
+
+        puts("Give me some shellcode, k");
+
+        /* Vulnérabilité : lecture non protégée */
+        gets(buffer);
+
+        /* Le shellcode est supposé être exécuté après */
+    }
+    else {
+        /* === PROCESSUS PÈRE === */
+
+        while (1) {
+            wait(&status);
+
+            /* Si le fils s’est terminé normalement ou via signal */
+            if (WIFEXITED(status) || WIFSIGNALED(status)) {
+                puts("child is exiting...");
+                return 0;
+            }
+
+            /* Lecture du registre EAX du fils */
+            syscall = ptrace(PTRACE_PEEKUSER, child, 0x2c, 0);
+
+            /* 0xb = syscall execve en x86 */
+            if (syscall == 11) {
+                puts("no exec() for you");
+                kill(child, SIGKILL);
+                return 0;
+            }
+        }
+    }
+
+    return 0;
+}
