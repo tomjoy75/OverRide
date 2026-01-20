@@ -24,6 +24,10 @@ En revanche, les appels open/read/write restent autorisés, ce qui permet d’ex
 
 Du coup on doit construire le shellcode pour 
 1. open("/home/users/level04/.pass", O_RDONLY) -> sys 5
+```
+level04@OverRide:~$ grep O_RDONLY /usr/include/bits/fcntl.h 
+#define O_RDONLY	     00
+```
 2. read(fd, buffer, size) -> sys 3
 3. write(1, buffer, size) -> sys 4
 4. exit(0) -> sys 1
