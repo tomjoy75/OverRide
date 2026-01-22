@@ -1,0 +1,29 @@
+On remarque le printf() qui va nous permettre un exploit de ty format string
+Cette ligne : `buffer[i] ^= 0x20`; est equivalente a aller chercher l'equivalent majuscule minuscule:
+
+| Caractère | Hex  | Binaire   |
+| --------- | ---- | --------- |
+| `'A'`     | 0x41 | 0100 0001 |
+| `'a'`     | 0x61 | 0110 0001 |
+| `'B'`     | 0x42 | 0100 0010 |
+| `'b'`     | 0x62 | 0110 0010 |
+| `'Z'`     | 0x5A | 0101 1010 |
+| `'z'`     | 0x7A | 0111 1010 |
+
+En effet pour pour convertir entre maj/min, il suffit juste d'inverser le bit 6 (0010 0000) soit 32 ou 0x20
+L'operation XOR permet d'inverser certains bits precis sans toucher aux autres
+
+```bash
+(gdb) p/x 'b' - 'B'
+$3 = 0x20
+(gdb) p/x 'a' - 'A'
+$4 = 0x20
+(gdb) p/x 'z' - 'Z'
+$5 = 0x20
+```
+
+Avec le direct parameter access, on peut se rendre compte que le 10 e argument du printf correspond au debut du buffer:
+``` bash
+level05@OverRide:~$ python -c 'print("AAAA | %10$x")' | ./level05 
+aaaa | 61616161
+```

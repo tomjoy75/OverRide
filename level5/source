@@ -1,0 +1,28 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(void)
+{
+    char buffer[100];
+    unsigned int i = 0;
+
+    // Lit une ligne depuis stdin (max 99 caractères + '\0')
+    fgets(buffer, sizeof(buffer), stdin);
+
+    // Parcourt chaque caractère de la chaîne
+    for (i = 0; i < strlen(buffer); i++)
+    {
+        // Si le caractère est une lettre majuscule (A-Z)
+        if (buffer[i] > 'A' - 1 && buffer[i] <= 'Z')
+        {
+            // Convertit en minuscule via XOR 0x20
+            buffer[i] ^= 0x20;
+        }
+    }
+
+    // ⚠️ Affiche la chaîne comme format string
+    printf(buffer);
+
+    exit(0);
+}
