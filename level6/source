@@ -1,0 +1,67 @@
+int auth(char *s, int serial)
+{
+    int i;
+    int hash;
+    int len;
+
+    // Supprime le '\n' de fgets
+    s[strcspn(s, "\n")] = '\0';
+
+    // Longueur max 32
+    len = strnlen(s, 32);
+
+    // Login trop court → échec
+    if (len <= 5)
+        return 1;
+
+    // Anti-debug
+    if (ptrace(PTRACE_TRACEME, 0, 1, 0) == -1)
+    {
+        puts("\033[32m.---------------------------.");
+        puts("\033[31m| !! TAMPERING DETECTED !!  |");
+        puts("\033[32m'---------------------------'");
+        return 1;
+    }
+
+    // Initialisation du hash
+    hash = (s[3] ^ 0x1337) + 6221293;
+
+    // Boucle de hash
+    for (i = 0; i < len; i++)
+    {
+        // Refuse caractères de contrôle
+        if (s[i] <= 31)
+            return 1;
+
+        hash += (hash ^ (unsigned int)s[i]) % 0x539;
+    }
+
+    // Compare le hash calculé avec le serial fourni
+    return serial != hash;
+}
+int main(int argc, char **argv)
+{
+    int serial;
+    char login[28];
+
+    puts("***********************************");
+    puts("*\t\tlevel06\t\t  *");
+    puts("***********************************");
+
+    printf("-> Enter Login: ");
+    fgets(login, 32, stdin);
+
+    puts("***********************************");
+    puts("***** NEW ACCOUNT DETECTED ********");
+    puts("***********************************");
+
+    printf("-> Enter Serial: ");
+    scanf("%d", &serial);
+
+    if (auth(login, serial))
+        return 1;
+
+    puts("Authenticated!");
+    system("/bin/sh");
+    return 0;
+}
