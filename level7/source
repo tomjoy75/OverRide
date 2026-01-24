@@ -1,0 +1,121 @@
+void clear_stdin(void);
+unsigned int get_unum(void);
+void prog_timeout(void);
+int store_number(int *data);
+int read_number(int *data);
+
+int main(int argc, char **argv, char **envp)
+{
+    int data[100];
+    char command[20];
+    int ret = 0;
+
+    memset(data, 0, sizeof(data));
+    memset(command, 0, sizeof(command));
+
+    // Efface argv et envp (anti-forensic)
+    for (char **p = argv; *p; p++)
+        memset(*p, 0, strlen(*p));
+
+    for (char **p = envp; *p; p++)
+        memset(*p, 0, strlen(*p));
+
+    puts("----------------------------------------------------");
+    puts("  Welcome to wil's crappy number storage service!");
+    puts("----------------------------------------------------");
+    puts(" Commands:");
+    puts("    store - store a number into the data storage");
+    puts("    read  - read a number from the data storage");
+    puts("    quit  - exit the program");
+    puts("----------------------------------------------------");
+    puts("   wil has reserved some storage :>");
+    puts("----------------------------------------------------");
+
+    while (1)
+    {
+        printf("Input command: ");
+        ret = 1;
+
+        fgets(command, sizeof(command), stdin);
+        command[strcspn(command, "\n")] = 0;
+
+        if (!strcmp(command, "store"))
+            ret = store_number(data);
+
+        else if (!strcmp(command, "read"))
+            ret = read_number(data);
+
+        else if (!strcmp(command, "quit"))
+            return 0;
+
+        if (ret == 0)
+            printf(" Completed %s command successfully\n", command);
+        else
+            printf(" Failed to do %s command\n", command);
+
+        memset(command, 0, sizeof(command));
+    }
+}
+
+void clear_stdin(void)
+{
+    int c;
+
+    do {
+        c = getchar();
+        if ((char)c == '\n')
+            return;
+    } while ((char)c != -1);
+}
+
+unsigned int get_unum(void)
+{
+    unsigned int value = 0;
+
+    fflush(stdout);
+    scanf("%u", &value);
+    clear_stdin();
+
+    return value;
+}
+
+void prog_timeout(void)
+{
+    __asm__("int $0x80");
+}
+
+int store_number(int *data)
+{
+    unsigned int number;
+    unsigned int index;
+
+    printf(" Number: ");
+    number = get_unum();
+
+    printf(" Index: ");
+    index = get_unum();
+
+    // Protection "wil"
+    if ((index % 3 == 0) || ((number >> 24) == 0xb7))
+    {
+        puts(" *** ERROR! ***");
+        puts("   This index is reserved for wil!");
+        puts(" *** ERROR! ***");
+        return 1;
+    }
+
+    // Écriture arbitraire
+    data[index] = number;
+    return 0;
+}
+
+int read_number(int *data)
+{
+    unsigned int index;
+
+    printf(" Index: ");
+    index = get_unum();
+
+    printf(" Number at data[%u] is %u\n", index, data[index]);
+    return 0;
+}
